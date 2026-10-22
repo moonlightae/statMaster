@@ -1,0 +1,11 @@
+{
+  "name": "stat-master",
+  "version": "1.0.0",
+  "description": "Stat Master — 총 스탯 입력",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "private": true
+}
