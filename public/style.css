@@ -16,8 +16,11 @@ body { margin: 0; }
 main { max-width: 780px; min-height: 100svh; margin: 0 auto; padding: 0 16px; }
 h1 { height: 70svh; margin: 0; display: flex; align-items: center; justify-content: center; line-height: 0; }
 h1 img { display: inline-block; width: 200px; height: 200px; }
-.secondary-stats { display: grid; min-height: 0; margin: 0; padding: 4px 4px max(16px, env(safe-area-inset-bottom)); align-content: start; grid-template-rows: repeat(6, minmax(56px, auto)); grid-auto-flow: column; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+.secondary-stats { display: grid; min-height: 0; margin: 0; padding: 4px 4px max(16px, env(safe-area-inset-bottom)); align-content: start; grid-template-rows: repeat(7, minmax(56px, auto)); grid-auto-flow: column; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
 .stat { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 56px; }
+.fairy-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0 4px 16px; }
+select { max-width: 70%; min-height: 44px; padding: 8px 6px; border: 1px solid #dedede; border-radius: 6px; background: #fff; color: #222; font: inherit; }
+select:focus-visible { outline: 2px solid #444; outline-offset: 2px; }
 label { font-size: 14px; line-height: 1.45; word-break: keep-all; }
 .value { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .value span { color: #777; font-size: 13px; }
@@ -78,7 +81,7 @@ form { margin: 0; }
 
 @media (max-width: 520px) { .totals { grid-template-columns: 1fr; } .unit-controls button { min-width: 44px; } }
 
-.attack-type { grid-column: 2; grid-row: 6; flex-wrap: wrap; padding: 4px 0; }
+.attack-type { grid-column: 2; grid-row: 7; flex-wrap: wrap; padding: 4px 0; }
 .attack-type > span { font-size: 14px; }
 .attack-type .unit-controls { flex: 0 1 auto; }
 .unit-controls button:focus-visible { outline: 2px solid #444; outline-offset: 2px; }
@@ -107,7 +110,7 @@ form { margin: 0; }
 .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .metrics span { display: block; color: #777; font-size: 14px; }
 .metrics strong { display: block; margin-top: 6px; font-size: clamp(26px, 6vw, 40px); font-weight: 400; }
-.charts, .recommendations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .chart { min-width: 0; padding: 16px 0; }
 .chart .muted { margin: 0 0 12px; font-size: 12px; }
 .chart svg { display: block; width: 100%; overflow: visible; }
@@ -116,9 +119,9 @@ form { margin: 0; }
 .curve { fill: none; stroke: #333; stroke-width: 2; }
 .tangent { fill: none; stroke: #ad8e47; stroke-width: 1.5; stroke-dasharray: 4 3; }
 .point { fill: #ad8e47; }
-.recommendations ol { padding-left: 22px; margin: 16px 0 0; }
-.recommendations li { padding: 8px 0; font-size: 13px; line-height: 1.6; }
-.recommendations li strong { display: block; font-weight: 400; color: #777; }
+.recommendations th { width: 50%; color: #777; }
+.recommendations td { vertical-align: top; font-size: 14px; padding: 16px 8px; }
+.recommendations small { display: block; margin-top: 6px; color: #777; font-size: 12px; line-height: 1.6; }
 .allocation { padding: 24px 0; border-top: 1px solid #eee; }
 .allocation > p { font-size: 14px; }
 .distribution { list-style: none; padding: 0; margin: 20px 0; }
@@ -130,8 +133,10 @@ th, td { padding: 12px 6px; border-bottom: 1px solid #eee; font-weight: 400; }
 .model { border-top: 1px solid #eee; margin-top: 32px; }
 .model p { color: #777; font-size: 13px; line-height: 1.8; }
 @media (max-width: 520px) {
-  .charts, .recommendations { grid-template-columns: 1fr; gap: 8px; }
+  .charts { grid-template-columns: 1fr; gap: 8px; }
 }
+
+
 
 
 

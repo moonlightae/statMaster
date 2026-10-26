@@ -12,7 +12,9 @@ function readBuild() {
     const unit = input.closest('.total').querySelector('[data-unit][aria-pressed="true"]').dataset.unit;
     build[key] = Number(input.value) * UNIT[unit];
   }
-  STATS.filter(({ key }) => key !== "damage" && key !== "health").forEach(({ key }) => build[key] = Number(form.elements[key].value));
+  STATS.forEach(({ key }) => build[key] = Number(form.elements[key].value));
+  build.fairy = form.elements.fairy.value;
+  build.fairyLevel = Number(form.elements.fairyLevel.value);
 
   const normalized = fromTotals(build);
   evaluate(normalized);
@@ -34,7 +36,7 @@ try { savedDraft = localStorage.getItem('stat-master-input'); } catch { /* Stora
 try {
   const draft = JSON.parse(savedDraft || sessionStorage.getItem('stat-master-input') || 'null');
   if (draft) {
-    for (const input of form.querySelectorAll('input')) input.value = draft.values?.[input.name] ?? '';
+    for (const input of form.querySelectorAll('input, select')) input.value = draft.values?.[input.name] ?? (input.name === 'fairy' ? 'none' : input.name === 'fairyLevel' ? '10' : '');
     form.querySelectorAll('.unit-controls').forEach(group => {
       const input = group.closest('.total')?.querySelector('input');
       const selected = input ? draft.units?.[input.name] : draft.style;

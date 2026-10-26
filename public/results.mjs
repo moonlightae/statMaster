@@ -1,4 +1,4 @@
-import { STATS, validate, evaluate, derivatives, upgrades, formatAmount } from './calculator.mjs';
+import { STATS, validate, evaluate, evaluateChange, derivatives, upgrades, formatAmount } from './calculator.mjs';
 
 const format = formatAmount;
 const label = key => STATS.find(stat => stat.key === key).label;
@@ -9,14 +9,14 @@ try {
   validate(build);
   const values = evaluate(build);
   if (build.totalsOnly) {
-    document.querySelector('#optimizer-status').closest('section').querySelector('h2').textContent = 'DPS·HPS 균형 분배';
-    document.querySelector('#optimizer-status').previousElementSibling.textContent = '장비 9개·펫 3마리, 개체당 다른 옵션 2개로 제한한 비교 모델입니다. 현재 피해·체력 보너스는 총합에서 분리할 수 없어 유지한 채 새 옵션을 비교하므로, 실제 전체 재분배의 최적해는 아닙니다.';
+    document.querySelector('#optimizer-status').closest('section').querySelector('h2').textContent = 'PvP 모의전 상위 5개 분배';
+    document.querySelector('#optimizer-status').previousElementSibling.textContent = '장비 9개·펫 3마리, 개체당 다른 옵션 2개로 제한한 비교 모델입니다. 현재 피해·체력 보너스는 총합에서 분리할 수 없어 유지한 채 새 옵션을 비교하므로, 현재 총합 기준의 가상 PvP 비교 모델이며 실제 전체 재분배의 최적해는 아닙니다.';
   }
   document.querySelector('#result-content').hidden = false;
   document.querySelector('#dps').textContent = format(values.dps);
   document.querySelector('#hps').textContent = format(values.hps);
-  document.querySelector('#totals-summary').textContent = '총 피해 ' + format(values.totalDamage) + ' · 총 체력 ' + format(values.totalHealth) + ' · 재생 ' + format(values.regenHps) + '/초 · 흡수 ' + format(values.lifestealHps) + '/초';
-  showRecommendations();
+  document.querySelector('#totals-summary').textContent = '기준 피해 ' + format(build.baseDamage) + ' · 기준 체력 ' + format(build.baseHealth) + ' · 총 피해 ' + format(values.totalDamage) + ' · 총 체력 ' + format(values.totalHealth) + ' · 재생 ' + format(values.regenHps) + '/초 · 흡수 ' + format(values.lifestealHps) + '/초 · 블록 ' + values.block + '% · 반사 ' + values.reflect + '%';
+  showRecommendations(upgrades(build));
   showCharts();
   showNotes();
   optimizeInWorker();
@@ -25,15 +25,15 @@ try {
   document.querySelector('#result-error').textContent = '입력값을 확인해 주세요. ' + error.message;
 }
 
-function showRecommendations() {
-  const rows = upgrades(build).filter(row => Number.isFinite(row.score) && (row.dpsGain > 0 || row.hpsGain > 0)).slice(0, 3);
-  document.querySelector('#recommendations').innerHTML = '<div><h3>DPS·HPS 함께 평가</h3><ol>' +
-    rows.map(row => '<li><span>' +
-      (build.totalsOnly && ['damage', 'health'].includes(row.key) ? '총 ' + row.label + ' 상대 증가' : row.label) +
-      ' +' + row.max + (build.totalsOnly && ['damage', 'health'].includes(row.key) ? '%' : '%p') +
-      '</span><strong>DPS +' + format(row.dpsGain) + ' · HPS +' + format(row.hpsGain) + '/초' +
-      (row.gain === null ? ' · 회복 발생' : ' · 종합 +' + (row.gain * 100).toFixed(1) + '%') +
-      '</strong></li>').join('') + '</ol></div>';
+function showRecommendations(rankings) {
+  const name = key => build.totalsOnly && ['damage', 'health'].includes(key) ? '총 ' + label(key) + ' 상대 변화' : label(key);
+  const list = (rows, decreasing) => rows.slice(0, 3).map(row => '<li>' + name(row.key) + (row.direction === -1 ? ' 감소' : '') +
+    '<small>' + (decreasing ? '감소 손실 ' + format(row.lossSlope) : '증가 기울기 ' + format(row.slope)) + '/초</small></li>').join('') || '<li>해당 스탯이 없습니다.</li>';
+  document.querySelector('#recommendations').innerHTML = ['dps', 'hps', 'pvp'].map(metric =>
+    '<h3>' + (metric === 'pvp' ? 'PvP 기준 · 현재 분배 상대 순피해율 우위' : metric.toUpperCase() + ' 기준') + '</h3><table><thead><tr><th scope="col">집중해서 올릴 스탯</th>' +
+    '<th scope="col">줄여도 손실이 적은 스탯</th></tr></thead><tbody><tr><td><ol>' +
+    list(rankings[metric].increase, false) + '</ol></td><td><ol>' + list(rankings[metric].decrease, true) +
+    '</ol></td></tr></tbody></table>').join('');
 }
 function showCharts() {
   const slopes = derivatives(build);
@@ -47,7 +47,7 @@ function showCharts() {
       const high = current + spec(key).max * 2;
       const samples = Array.from({ length: 61 }, (_, i) => {
         const x = low + (high - low) * i / 60;
-        return [x, evaluate({ ...build, [key]: x })[metric]];
+        return [x, evaluateChange(build, key, x)[metric]];
       });
       const ymax = Math.max(...samples.map(point => point[1]), 1);
       const px = x => 40 + (x - low) / (high - low) * 270;
@@ -73,13 +73,11 @@ function showCharts() {
 
 function showNotes() {
   document.querySelector('#model-notes').innerHTML =
-    '<p>입력한 총 피해·총 체력은 모든 보너스 적용 후 수치로 그대로 사용합니다. 보너스를 다시 곱하지 않습니다. 공격 유형 보너스 변화는 입력한 해당 보너스를 기준으로 비교합니다. 피해·체력 그래프는 현재 총합을 기준으로 한 상대 변화입니다.</p>' +
-    '<p>피해·체력의 개별 보너스는 입력받지 않습니다. 총합만으로 이 보너스의 원래 값을 역산할 수 없어, 참고 분배는 현재 총합에 포함된 피해·체력 보너스를 제거하지 않은 비교 모델입니다. 전체 재분배의 실제 최적해로 해석하지 마세요.</p>' +
-    '<p>DPS = 총 피해 ÷ 공격 간격 × (1 + 더블 찬스/100) × [1 + 치명타 확률/100 × 치명타 피해/100]. 치명타 피해 입력값은 기본 20%를 포함합니다. 예를 들어 표시값 20%이면 치명타 한 번의 피해는 일반 공격의 1.2배, 100%이면 2배입니다. 치명타 확률·더블 찬스는 100% 상한을 적용합니다.</p>' +
-    '<p>HPS = 총 체력 × 체력 재생/100 + DPS × 생명력 흡수/100. 사용자 제공 기준에 따라 재생은 초당 총 체력의 해당 비율, 흡수는 치명타를 포함한 실제 피해의 해당 비율로 계산합니다. 최대 체력에 도달해 버려지는 회복량은 제외하지 않습니다.</p>' +
-    '<p>공격 속도 배율 = (공격 속도 + 100) / 100. 비교 기준 공격 간격 = 1.7초 ÷ 배율. FM DPS의 공속 0% 예시인 1.7초를 공통 기준으로 적용합니다. 치명타·재생·흡수는 사용자 제공 기준이며 별도의 게임 실측 검증은 하지 않았습니다. 더블 찬스는 같은 피해의 추가 타격 1회로 모델링하고, 추가 타격 지연은 반영하지 않습니다. 확률 100% 상한에서의 편미분은 오른쪽 방향 기준입니다.</p>' +
-    '<p>참고 분배는 현재 총합을 기준으로 24개 옵션 최대치를 비교하는 모델입니다. 개체별 같은 옵션 중복은 금지하고 각 옵션은 최대 12개입니다. 치명타 피해 기본 20%는 옵션을 소비하지 않으며 재분배 후에도 유지합니다. DPS × HPS가 가장 큰 균형 분배 한 가지만 제공합니다. 두 지표의 상대 변화에 동일한 가중치를 둡니다. 한 지표의 일부 감소와 다른 지표의 더 큰 증가가 절충될 수 있습니다. 스킬·블록은 이 평타/회복 목적함수에 영향을 주지 않아 분배안에서 제외합니다.</p>' +
-    '<p>출처: <a href="https://forge-master.fandom.com/wiki/Stats_and_Power" target="_blank" rel="noreferrer">총 피해·체력 공식</a> · <a href="https://github.com/athoschiari/forge-master-calculator/blob/main/lib/engine/formulas.dart" target="_blank" rel="noreferrer">이전 참고 커뮤니티 모델</a>. 현재 치명타·공속·회복식은 사용자 제공 기준을 우선합니다. 옵션 최대치는 제공해 주신 이미지 기준입니다. 기본 공격 간격의 확정값은 찾지 못했습니다. <a href="https://ieagalei.github.io/FmDPS/" target="_blank" rel="noreferrer">FM DPS</a>의 1.7초는 무기별 차이가 있는 예시로 안내되어 있어 비교용 고정값으로 사용합니다. DPS의 상대 증가율은 공통 기본 간격에 영향을 받지 않지만, 재생과 흡수가 섞이는 HPS의 효율·분배는 기본 간격에 영향을 받습니다.</p>';
+    '<p>기준 피해 = 총 피해 ÷ (1 + 피해/100) ÷ (1 + 공격 유형 피해/100). 기준 체력 = 총 체력 ÷ (1 + 체력/100). 현재 총수치에는 보너스를 중복 적용하지 않으며, 기준값을 고정해 편미분과 재분배를 계산합니다.</p>' +
+    '<p>DPS = 총 피해 ÷ [1.7 ÷ (1 + 공속/100)] × (1 + 더블 찬스/100) × [1 + 치명타 확률/100 × 치명타 피해/100]. 치명타·더블·블록·반사 확률에는 100% 상한을 적용합니다. HPS = 총 체력 × 재생/100 + DPS × 흡수/100.</p>' +
+    '<p>블록은 해당 확률로 피해를 무효화합니다. 반사는 무효화하지 않고 실제 받은 직접 피해를 해당 확률로 되돌려줍니다. 모의전은 평균값으로 계산하며, 흡수는 상대 블록 이후 직접 피해에 적용합니다. 반사의 재반사와 반사 피해에 의한 흡수는 계산하지 않습니다.</p>' +
+    '<p>요정 효과는 입력값에 이미 포함되어 있어 다시 더하지 않습니다. 스탯 변화에서는 요정 보너스의 차이만 반영합니다. 10레벨 기준 Mira는 스킬 피해 15%p당 치명타 10%p(상한 80%p), Tira는 재사용 대기시간 감소 1%p당 블록 2.5%p(상한 30%p), Lora는 체력 10%p당 반사 7.5%p(상한 30%p)이며 변환 계수는 레벨에 비례합니다. 재분배에서는 선택한 요정을 유지하고 새 옵션의 효과를 계산합니다.</p>' +
+    '<p>PvP 추천은 현재 분배를 고정된 상대로 두고, 상대 체력 대비 순피해율 − 자기 체력 대비 순피해율의 편미분을 비교합니다. 분배는 장비 9개·펫 3마리의 서로 다른 옵션 2개, 총 24개 제약을 유지합니다. 반사 확률은 직접 장비 옵션으로 배정하지 않고 Lora의 체력 연동으로 얻습니다. 128개 표본 후보의 대결 승점 상위 5개를 표시하며 전체 조합의 최적해를 보장하지 않습니다. 스킬 자체의 피해는 제외합니다.</p>';
 }
 
 function optimizeInWorker() {
@@ -88,25 +86,22 @@ function optimizeInWorker() {
   worker.onmessage = event => {
     worker.terminate();
     if (event.data.error) { status.textContent = event.data.error; return; }
-    status.textContent = 'DPS·HPS를 함께 평가한 24개 옵션 조합 탐색 완료';
     const solution = event.data.result;
-    const current = evaluate(build);
-    const change = (next, before) => before > 0 ? ((next / before - 1) * 100).toFixed(1) + '%' : '0 → ' + format(next);
-    const section = document.createElement('section');
-    section.className = 'allocation';
-    const rows = Object.entries(solution.counts).filter(([, count]) => count > 0);
-    section.innerHTML = '<h3>DPS·HPS 균형 분배</h3><p>DPS <strong>' + format(solution.dps) + '</strong> (' +
-      change(solution.dps, current.dps) + ') · HPS <strong>' + format(solution.hps) + '</strong> (' +
-      change(solution.hps, current.hps) + ')</p><p class="muted">DPS × HPS 최대화 · 두 지표의 상대 변화에 동일 가중치</p>' +
-      '<ul class="distribution">' + rows.map(([key, count]) => '<li><span>' + label(key) +
-      '</span><span>' + spec(key).max + '% × ' + count + '개 = ' + (spec(key).max * count) +
-      '%' + (key === 'critDamage' ? ' + 기본 20%' : '') + '</span></li>').join('') + '</ul>' +
-      '<details><summary>장비·펫별 배치 보기</summary><table><thead><tr><th>개체</th><th>옵션 1</th><th>옵션 2</th></tr></thead><tbody>' +
-      solution.slots.map(slot => '<tr><th>' + slot.name + '</th>' + slot.keys.map(key => '<td>' + label(key) + ' ' +
-      spec(key).max + '%</td>').join('') + '</tr>').join('') + '</tbody></table></details>';
-    document.querySelector('#allocations').append(section);
-  };  worker.onerror = () => { worker.terminate(); status.textContent = '분배 계산에 실패했습니다. 페이지를 새로고침해 주세요.'; };
-  worker.postMessage(build);
+    const pvp = solution.pvp;
+    status.textContent = pvp.candidates + '개 후보 · ' + pvp.matches.toLocaleString('ko-KR') + '회 대결 완료';
+    const allocations = document.querySelector('#allocations');
+    allocations.innerHTML = '<label for="allocation-choice">분배 선택</label> <select id="allocation-choice">' +
+      solution.topFive.map((entry, i) => '<option value="' + i + '">' + (entry.pvp.tied ? '공동 ' : '') +
+        entry.pvp.rank + '위 · 분배 ' + (i + 1) + ' · ' + entry.pvp.record.points + '점</option>').join('') +
+      '</select><div id="allocation-detail"></div>';
+    const choice = document.querySelector('#allocation-choice');
+    choice.addEventListener('change', () => showAllocation(solution.topFive[Number(choice.value)]));
+    showAllocation(solution.topFive[0]);
+  };
+  worker.onerror = () => {
+    worker.terminate();
+    status.textContent = '분배 계산에 실패했습니다. 페이지를 새로고침해 주세요.';
+  };  worker.postMessage(build);
 }
 
 
@@ -115,3 +110,29 @@ function optimizeInWorker() {
 
 
 
+
+
+
+function showAllocation(solution) {
+  const pvp = solution.pvp;
+  const current = evaluate(build);
+  const change = (next, before) => before > 0 ? ((next / before - 1) * 100).toFixed(1) + '%' : '0 → ' + format(next);
+  const recordText = record => record.wins + '승 ' + record.draws + '무 ' + record.losses + '패 · ' + record.points + '점';
+  const duel = pvp.versusCurrent;
+  const duelText = ({ left: '승리', right: '패배', draw: '무승부' })[duel.winner];
+  const duration = duel.seconds === null ? '서로 회복을 뚫지 못함' : duel.seconds.toLocaleString('ko-KR', { maximumFractionDigits: 2 }) + '초';
+  const section = document.createElement('section');
+  section.className = 'allocation';
+  const rows = Object.entries(solution.counts).filter(([, count]) => count > 0);
+  section.innerHTML = '<h3>' + (pvp.tied ? '공동 ' : '') + pvp.rank + '위 분배' +
+    '</h3><p><strong>' + recordText(pvp.record) + '</strong></p><p class="muted">현재 분배의 같은 상대 전적: ' +
+    recordText(pvp.currentRecord) + '</p><p>현재 입력 분배와 맞대결: <strong>' + duelText + '</strong> · ' + duration +
+    '</p><p>DPS <strong>' + format(solution.dps) + '</strong> (' + change(solution.dps, current.dps) +
+    ') · HPS <strong>' + format(solution.hps) + '</strong> (' + change(solution.hps, current.hps) +
+    ') · 체력 <strong>' + format(solution.totalHealth) + '</strong> · 블록 ' + format(solution.block) + '% · 반사 ' + format(solution.reflect) + '%</p>' +
+    '<p class="muted">승리 1점 · 무승부 0.5점 · 동률은 동률 후보끼리 맞대결. 표본 후보군 안의 우승 결과입니다.</p>' +
+    '<ul class="distribution">' + rows.map(([key, count]) => '<li><span>' + label(key) +
+    '</span><span>' + spec(key).max + '% × ' + count + '개 = ' + (spec(key).max * count) +
+    '%' + (key === 'critDamage' ? ' + 기본 20%' : '') + '</span></li>').join('') + '</ul>';
+  document.querySelector('#allocation-detail').replaceChildren(section);
+}
